@@ -1,93 +1,203 @@
-# sdk-node
+# RadarData SDK para Node e TypeScript
 
+SDK oficial do [RadarData](https://radardata.com.br) para Node 18+, em
+TypeScript, **sem dependência em tempo de execução**. Embrulha a API pública
+(`/api/v2`): consultas, Verify (verificação de identidade), Motor de Análises e
+webhooks.
 
+A API continua disponível para quem preferir chamá-la direto. Este pacote
+existe para você não precisar.
 
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.com/radardata.com.br/sdk-node.git
-git branch -M main
-git push -uf origin main
+```bash
+npm i @radardata/sdk
 ```
 
-## Integrate with your tools
+## Começando
 
-* [Set up project integrations](https://gitlab.com/radardata.com.br/sdk-node/-/settings/integrations)
+```ts
+import { RadarData, emReais } from "@radardata/sdk";
 
-## Collaborate with your team
+const radar = new RadarData({ token: process.env.RADARDATA_TOKEN! });
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+const saldo = await radar.catalogo.saldo();
+console.log(emReais(saldo.centavos));   // 5.000,00
+console.log(saldo.disponivelCentavos);  // 500000
+```
 
-## Test and Deploy
+O token é o **token de API**, criado no painel, e não o da sua sessão do
+painel. Ele carrega escopos (`consultas`, `verify`, `analises`, `leitura`,
+`webhooks`): uma chamada fora do escopo volta `SemEscopo`.
 
-Use the built-in continuous integration in GitLab.
+Funciona em ESM e em CommonJS:
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+```js
+const { RadarData } = require("@radardata/sdk");
+```
 
-***
+## Consultas
 
-# Editing this README
+```ts
+const resultado = await radar.consultas.executar("cpf", "12345678909");
+```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+Gasta saldo. O retorno não é tipado porque cada serviço devolve um corpo
+diferente e a lista cresce: tipar tudo aqui faria o SDK desatualizar a cada
+serviço novo sem ninguém perceber.
 
-## Suggestions for a good README
+Para saber o que a **sua** conta pode consultar, e por quanto:
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```ts
+for (const s of await radar.catalogo.servicos()) {
+  console.log(`${s.slug}: ${s.nome} (${s.precoCentavos} centavos)`);
+}
+```
 
-## Name
-Choose a self-explaining name for your project.
+## Verify
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+```ts
+const sessao = await radar.verify.criarSessao(
+  "kyc-cnpj",                               // uuid do fluxo ou o alias dele
+  { cnpj: "11222333000181" },
+  { reference_id: "pedido-4471", redirect_url: "https://seusite.com/ok" },
+);
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+console.log(sessao.url);   // mande a pessoa para cá
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+O resultado chega por **webhook**. Dá para consultar também:
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+```ts
+const atual = await radar.verify.sessao(sessao.id);
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+if (atual.status === "completed" && atual.resultado === "APROVADO") {
+  // ...
+}
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+> **Criar sessão não é idempotente.** Se der timeout, **não chame de novo às
+> cegas**: você pagaria duas sessões. Mande um `reference_id` seu e procure por
+> ele antes de criar outra.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+## Análises
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+Assíncrono: criar devolve o id, o resultado chega por webhook.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+```ts
+const analise = await radar.analises.criar("kyc-pf", { cpf: "12345678909" });
+const estado = await radar.analises.mostrar(String(analise.id));
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+Um `NaoEncontrado` aqui pode querer dizer **"o Motor não está liberado para a
+sua conta"**, e não "caminho errado": enquanto ele não está liberado, nada dele
+aparece para o cliente, de propósito.
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+## Webhooks: conferir que o aviso é nosso
 
-## License
-For open source projects, say how it is licensed.
+```ts
+import express from "express";
+import { exigirAssinatura } from "@radardata/sdk";
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+const app = express();
+
+// `express.raw`, NÃO `express.json`: a assinatura é do corpo cru.
+app.post("/radardata/webhook", express.raw({ type: "application/json" }), (req, res) => {
+  const evento = exigirAssinatura(
+    req.body,                                   // Buffer, o corpo CRU
+    req.header("X-RadarData-Signature"),
+    process.env.RADARDATA_WEBHOOK_SECRET!,
+  );
+
+  // Deduplique: reenviamos em caso de falha.
+  const entrega = req.header("X-RadarData-Delivery");
+
+  res.status(204).end();
+});
+```
+
+Três coisas que costumam dar errado aqui, e valem a leitura:
+
+**Use o corpo cru.** `express.raw()`, não `express.json()`. Reserializar muda
+espaços e ordem das chaves, o HMAC muda junto e a conferência falha sem motivo
+aparente. É o erro mais comum de qualquer integração deste tipo, e há um teste
+neste repositório que o demonstra.
+
+**Deduplique pelo `X-RadarData-Delivery`.** Reenviamos quando a entrega falha,
+então o mesmo evento pode chegar duas vezes.
+
+**A assinatura prova origem e conteúdo, não a hora.** O timestamp e o id de
+entrega viajam em cabeçalho, fora do corpo assinado, então ela não protege
+contra o reenvio de um aviso antigo e autêntico por quem o tenha interceptado.
+A dedup acima é a defesa prática.
+
+## Erros
+
+Cada situação tem a sua classe, para você não comparar strings:
+
+| Classe | Quando |
+|---|---|
+| `NaoAutenticado` | 401, token ausente, inválido ou revogado |
+| `SaldoInsuficiente` | 402, a conta não tem saldo para a operação |
+| `SemEscopo` | 403, o token não tem o escopo daquela rota |
+| `NaoEncontrado` | 404 |
+| `EntradaInvalida` | 422, veja `.corpo` para os campos |
+| `MuitasTentativas` | 429, teto de chamadas |
+| `ErroDoServidor` | 5xx, falha nossa |
+| `FalhaDeRede` | **sem resposta**: timeout, DNS, conexão recusada |
+
+Todas estendem `ErroRadarData`, que traz `.codigo`, `.status` e `.corpo`. O
+`.codigo` é o que vale para decidir no código; a mensagem é escrita para pessoa
+e muda.
+
+`FalhaDeRede` é separado de propósito: ali o SDK **não sabe** se a operação
+aconteceu. Numa chamada que gasta saldo isso importa, e o caminho é consultar
+pela mesma chave de idempotência, não repetir às cegas.
+
+## Teto de chamadas
+
+A API limita por token, **5 requisições por segundo** no plano padrão, e o
+grupo de webhooks tem teto próprio. Ao passar do teto vem `MuitasTentativas`
+(429); o SDK já respeita o `Retry-After` quando ele aparece.
+
+## Repetição automática, e por que ela não é global
+
+O SDK repete em 429 e 5xx **somente** nas chamadas em que manda
+`Idempotency-Key`: consultas, análises e operações. A mesma chave faz a API
+devolver a resposta anterior em vez de cobrar de novo.
+
+Criar sessão de Verify **não** tem idempotência na API, então o SDK **não
+repete** ali, qualquer que seja a configuração. Repetir criaria uma segunda
+sessão faturável, e um SDK que cobra duas vezes do seu cliente é pior do que
+um SDK que devolve erro.
+
+A chave é gerada automaticamente quando você não passa uma. Guarde a sua se
+quiser poder reconsultar o resultado depois de um timeout:
+
+```ts
+import { chaveIdempotencia } from "@radardata/sdk";
+
+const chave = chaveIdempotencia();
+await radar.consultas.executar("cpf", "12345678909", {}, chave);
+```
+
+## Apontando para outro ambiente
+
+```ts
+const radar = new RadarData({
+  token: process.env.RADARDATA_TOKEN!,
+  base: "https://api.radardata.dev.local/api/v2",
+  timeoutMs: 10_000,
+});
+```
+
+## Desenvolvimento
+
+```bash
+npm install
+npm test
+npm run typecheck
+npm run build
+```
+
+## Licença
+
+MIT.
