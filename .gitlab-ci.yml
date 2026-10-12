@@ -1,0 +1,62 @@
+# ============================================================================
+# CI/CD do @radardata/sdk. Publica no npmjs por TAG (vX.Y.Z).
+#
+# Variáveis (Settings → CI/CD → Variables, masked + protected):
+#   NPM_TOKEN   token de AUTOMAÇÃO do npmjs (Access Tokens → Generate → Automation)
+#
+# Use token de AUTOMAÇÃO, não "Publish" clássico: se a conta ou a organização
+# exigir 2FA para publicar, só o de automação passa sem pedir o código, e a
+# pipeline não tem onde digitar código nenhum.
+#
+# O escopo `@radardata` tem de existir no npmjs e ser nosso (organização ou
+# usuário com esse nome) ANTES do primeiro publish.
+# ============================================================================
+stages: [test, publicar]
+
+default:
+  image: node:20-alpine
+  before_script: [npm ci]
+
+teste:
+  stage: test
+  script:
+    - npm run typecheck
+    - npm test
+    - npm run build
+  rules:
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_COMMIT_BRANCH'
+
+publicar:
+  stage: publicar
+  script:
+    # A TAG MANDA, e o `package.json` tem de concordar.
+    #
+    # O npm publica o que está no `package.json`, e não o que está na tag. Sem
+    # esta conferência, taguear v1.1.1 com o arquivo em 1.1.0 republica 1.1.0
+    # (ou falha dizendo que já existe), e versão publicada no npm NÃO se apaga:
+    # dá para descontinuar, não para apagar.
+    - |
+      esperada="${CI_COMMIT_TAG#v}"
+      noArquivo=$(node -p "require('./package.json').version")
+      if [ "$esperada" != "$noArquivo" ]; then
+        echo "ERRO: a tag diz $esperada e o package.json diz $noArquivo."
+        echo "Acerte a versão no package.json, faça o commit e tagueie de novo."
+        exit 1
+      fi
+      echo "Tag e package.json concordam em $noArquivo."
+    # Pre-lancamento funciona, e a regra e a mesma: para taguear v1.2.0-beta.1 o
+    # `package.json` tem de dizer 1.2.0-beta.1. A guarda acima vai barrar se
+    # nao disser, e isso e proposital.
+    - |
+      test -n "$NPM_TOKEN" || { echo "ERRO: NPM_TOKEN não configurado."; exit 1; }
+    - npm run build
+    - echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+    # `--access public`: pacote com escopo nasce RESTRITO no npm, e sem esta
+    # linha o primeiro publish falha (ou publica privado, pior).
+    - npm publish --access public --provenance=false
+    - echo "Publicado. Confira em https://www.npmjs.com/package/@radardata/sdk"
+  after_script:
+    - rm -f ~/.npmrc
+  rules:
+    - if: '$CI_COMMIT_TAG'
