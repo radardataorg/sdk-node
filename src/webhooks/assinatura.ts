@@ -7,6 +7,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * webhook_secret>`, mais `X-RadarData-Event`, `X-RadarData-Delivery` e
  * `X-RadarData-Timestamp`.
  *
+ * Aceita `string` ou `Uint8Array`, e nao `Buffer`, de proposito: `Buffer` e um
+ * global do Node e poria `@types/node` na superficie publica do pacote, o que
+ * quebra o `tsc` de quem compila para borda, Deno ou navegador. `Buffer` E um
+ * `Uint8Array`, entao o que o `express.raw()` entrega continua servindo.
+ *
  * O CORPO TEM DE SER O CRU. Em Express e `express.raw()`, nao `express.json()`;
  * reserializar o objeto ja decodificado muda espaco e ordem de chave, o HMAC
  * muda junto e a conferencia falha sem motivo aparente. E o erro mais comum
@@ -20,7 +25,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * fazer de qualquer forma, porque reenviamos em caso de falha.
  */
 export function confereAssinatura(
-  corpoCru: string | Buffer,
+  corpoCru: string | Uint8Array,
   assinatura: string | null | undefined,
   segredo: string,
 ): boolean {
@@ -47,7 +52,7 @@ export function confereAssinatura(
  * @throws Error quando a assinatura nao confere
  */
 export function exigirAssinatura(
-  corpoCru: string | Buffer,
+  corpoCru: string | Uint8Array,
   assinatura: string | null | undefined,
   segredo: string,
 ): Record<string, unknown> {
@@ -56,7 +61,10 @@ export function exigirAssinatura(
   }
 
   try {
-    const dados = JSON.parse(typeof corpoCru === "string" ? corpoCru : corpoCru.toString("utf8"));
+    // `TextDecoder` e nao `Buffer.toString`: existe em Node, em navegador, em
+    // Deno e em Bun, e nao arrasta os tipos do Node para a superficie publica.
+    const texto = typeof corpoCru === "string" ? corpoCru : new TextDecoder().decode(corpoCru);
+    const dados = JSON.parse(texto);
     return dados && typeof dados === "object" ? (dados as Record<string, unknown>) : {};
   } catch {
     return {};
