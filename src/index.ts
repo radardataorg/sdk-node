@@ -2,6 +2,7 @@ import { type Configuracao, resolver } from "./configuracao.js";
 import { Analises } from "./recursos/analises.js";
 import { Catalogo } from "./recursos/catalogo.js";
 import { Consultas } from "./recursos/consultas.js";
+import { MonitoramentosJudiciais } from "./recursos/monitoramentos-judiciais.js";
 import { Verify } from "./recursos/verify.js";
 import { Webhooks } from "./recursos/webhooks.js";
 import { Transporte } from "./transporte.js";
@@ -30,6 +31,8 @@ export class RadarData {
 
   readonly analises: Analises;
 
+  readonly monitoramentosJudiciais: MonitoramentosJudiciais;
+
   readonly webhooks: Webhooks;
 
   constructor(config: Configuracao) {
@@ -39,6 +42,7 @@ export class RadarData {
     this.consultas = new Consultas(t);
     this.verify = new Verify(t);
     this.analises = new Analises(t);
+    this.monitoramentosJudiciais = new MonitoramentosJudiciais(t);
     this.webhooks = new Webhooks(t);
   }
 }
@@ -62,5 +66,6 @@ export {
 export { Analises } from "./recursos/analises.js";
 export { Catalogo } from "./recursos/catalogo.js";
 export { Consultas } from "./recursos/consultas.js";
+export { MonitoramentosJudiciais, type Pagina } from "./recursos/monitoramentos-judiciais.js";
 export { Verify } from "./recursos/verify.js";
 export { Webhooks } from "./recursos/webhooks.js";

@@ -29,6 +29,10 @@ export interface Servico {
   /** CPF, CNPJ, PLACA... o que a consulta espera receber. */
   readonly tipoDocumento: string | null;
   readonly precoCentavos: number;
+  /** Onde se usa: `/api/v2/{slug}`, ou `/api/v2/monitoramentos-judiciais` no monitoramento. */
+  readonly rota: string | null;
+  /** Monitoramento judicial: cria por `monitoramentosJudiciais`, nao por `consultas`. */
+  readonly monitoramento: boolean;
 }
 
 /**
@@ -70,6 +74,8 @@ export function paraServico(d: Record<string, unknown>): Servico {
     descricao: (d.descricao as string | null) ?? null,
     tipoDocumento: (d.tipo_documento as string | null) ?? null,
     precoCentavos: Number(d.preco ?? 0),
+    rota: (d.rota as string | null) ?? null,
+    monitoramento: d.rota === "/api/v2/monitoramentos-judiciais",
   };
 }
 
