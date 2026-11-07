@@ -98,7 +98,7 @@ Cobrança adiantada a cada 30 dias. A novidade chega pelo webhook
 
 ```ts
 const m = await radar.monitoramentosJudiciais.criar("monitoramento-documento", { documento: "12345678909", nome: "Fornecedor principal" });
-const eventos = await radar.monitoramentosJudiciais.eventos(String(m.id));
+const { data: eventos, meta } = await radar.monitoramentosJudiciais.eventos(String(m.id)); // meta.paginas
 await radar.monitoramentosJudiciais.cancelar(String(m.id)); // vale até o fim do período pago
 ```
 

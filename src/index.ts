@@ -66,6 +66,6 @@ export {
 export { Analises } from "./recursos/analises.js";
 export { Catalogo } from "./recursos/catalogo.js";
 export { Consultas } from "./recursos/consultas.js";
-export { MonitoramentosJudiciais } from "./recursos/monitoramentos-judiciais.js";
+export { MonitoramentosJudiciais, type Pagina } from "./recursos/monitoramentos-judiciais.js";
 export { Verify } from "./recursos/verify.js";
 export { Webhooks } from "./recursos/webhooks.js";

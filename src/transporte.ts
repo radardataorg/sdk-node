@@ -30,9 +30,11 @@ export class Transporte {
       corpo?: Record<string, unknown> | null;
       query?: Record<string, string | number | undefined>;
       chaveIdempotencia?: string;
+      /** O corpo inteiro, com `meta`, em vez de so o `data`: listas paginadas. */
+      envelope?: boolean;
     } = {},
   ): Promise<T> {
-    const { corpo, query, chaveIdempotencia } = opcoes;
+    const { corpo, query, chaveIdempotencia, envelope } = opcoes;
 
     const cabecalhos: Record<string, string> = {
       Authorization: `Bearer ${this.config.token}`,
@@ -91,13 +93,13 @@ export class Transporte {
         continue;
       }
 
-      return (await this.interpretar(resposta)) as T;
+      return (await this.interpretar(resposta, envelope)) as T;
     }
 
     throw ultimo ?? new ErroRadarData("Falha desconhecida no transporte.");
   }
 
-  private async interpretar(resposta: Response): Promise<unknown> {
+  private async interpretar(resposta: Response, envelope = false): Promise<unknown> {
     const cru = await resposta.text();
     let json: unknown;
     try {
@@ -108,6 +110,7 @@ export class Transporte {
     const corpo = (json ?? {}) as Record<string, unknown>;
 
     if (resposta.ok) {
+      if (envelope) return corpo;
       // `data` quando a rota embrulha (catalogo, saldo, analises) e o corpo
       // inteiro quando nao (sessao de Verify). Devolver sempre o conteudo
       // util poupa quem chama de saber qual rota faz o que.

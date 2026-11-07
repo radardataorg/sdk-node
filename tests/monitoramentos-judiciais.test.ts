@@ -53,6 +53,14 @@ describe("monitoramentos judiciais", () => {
     ]);
   });
 
+  it("listar e eventos devolvem a paginacao junto", async () => {
+    const meta = { pagina: 1, paginas: 3, total: 60 };
+    const { radar } = falso([json({ data: [{ id: "a" }], meta }), json({ data: [], meta })]);
+
+    expect(await radar.monitoramentosJudiciais.listar()).toEqual({ data: [{ id: "a" }], meta });
+    expect((await radar.monitoramentosJudiciais.eventos("a")).meta).toEqual(meta);
+  });
+
   it("catalogo diz onde se usa e marca o monitoramento", async () => {
     const { radar } = falso([
       json({ data: [

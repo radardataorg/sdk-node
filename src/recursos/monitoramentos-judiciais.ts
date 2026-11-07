@@ -1,5 +1,11 @@
 import type { Transporte } from "../transporte.js";
 
+/** Uma pagina: os itens e a paginacao (`pagina`, `paginas`, `total`). */
+export interface Pagina {
+  readonly data: Record<string, unknown>[];
+  readonly meta: { pagina?: number; paginas?: number; total?: number };
+}
+
 /**
  * Monitoramento judicial: processo, novos processos por CPF, CNPJ, nome ou termo, e
  * diarios oficiais. Escopo `consultas`. GASTA SALDO: cada ciclo de 30 dias e cobrado
@@ -23,8 +29,8 @@ export class MonitoramentosJudiciais {
     return this.t.pedir("POST", "monitoramentos-judiciais", { corpo: { ...entrada, servico } });
   }
 
-  async listar(pagina = 1, porPagina = 25): Promise<Record<string, unknown>[]> {
-    return this.t.pedir<Record<string, unknown>[]>("GET", "monitoramentos-judiciais", { query: { page: pagina, per_page: porPagina } });
+  async listar(pagina = 1, porPagina = 25): Promise<Pagina> {
+    return this.t.pedir<Pagina>("GET", "monitoramentos-judiciais", { query: { page: pagina, per_page: porPagina }, envelope: true });
   }
 
   async obter(id: string): Promise<Record<string, unknown>> {
@@ -37,9 +43,10 @@ export class MonitoramentosJudiciais {
   }
 
   /** O que o monitoramento achou. O conteudo some da RadarData em 30 dias: guarde do seu lado. */
-  async eventos(id: string, pagina = 1, porPagina = 25): Promise<Record<string, unknown>[]> {
-    return this.t.pedir<Record<string, unknown>[]>("GET", `monitoramentos-judiciais/${encodeURIComponent(id)}/eventos`, {
+  async eventos(id: string, pagina = 1, porPagina = 25): Promise<Pagina> {
+    return this.t.pedir<Pagina>("GET", `monitoramentos-judiciais/${encodeURIComponent(id)}/eventos`, {
       query: { page: pagina, per_page: porPagina },
+      envelope: true,
     });
   }
 }
