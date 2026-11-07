@@ -91,6 +91,20 @@ Um `NaoEncontrado` aqui pode querer dizer **"o Motor não está liberado para a
 sua conta"**, e não "caminho errado": enquanto ele não está liberado, nada dele
 aparece para o cliente, de propósito.
 
+## Monitoramentos judiciais
+
+Cobrança adiantada a cada 30 dias. A novidade chega pelo webhook
+`monitoramento_judicial.evento`, com o conteúdo, que some da RadarData em 30 dias.
+
+```ts
+const m = await radar.monitoramentosJudiciais.criar("monitoramento-documento", { documento: "12345678909", nome: "Fornecedor principal" });
+const eventos = await radar.monitoramentosJudiciais.eventos(String(m.id));
+await radar.monitoramentosJudiciais.cancelar(String(m.id)); // vale até o fim do período pago
+```
+
+No catálogo, `servico.monitoramento` diz quais serviços se usam assim, e
+`servico.rota`, onde.
+
 ## Webhooks: conferir que o aviso é nosso
 
 ```ts
