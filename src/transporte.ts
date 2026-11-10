@@ -32,9 +32,11 @@ export class Transporte {
       chaveIdempotencia?: string;
       /** O corpo inteiro, com `meta`, em vez de so o `data`: listas paginadas. */
       envelope?: boolean;
+      /** Envio de arquivo. Exclui `corpo`; o `fetch` monta o `Content-Type` com o boundary. */
+      formulario?: FormData;
     } = {},
   ): Promise<T> {
-    const { corpo, query, chaveIdempotencia, envelope } = opcoes;
+    const { corpo, query, chaveIdempotencia, envelope, formulario } = opcoes;
 
     const cabecalhos: Record<string, string> = {
       Authorization: `Bearer ${this.config.token}`,
@@ -67,7 +69,7 @@ export class Transporte {
         resposta = await this.config.fetch(url, {
           method: metodo,
           headers: cabecalhos,
-          body: corpo != null ? JSON.stringify(corpo) : undefined,
+          body: formulario ?? (corpo != null ? JSON.stringify(corpo) : undefined),
           signal: abortar.signal,
         });
       } catch (e) {

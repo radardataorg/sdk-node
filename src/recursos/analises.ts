@@ -35,9 +35,27 @@ export class Analises {
     return this.t.pedir("GET", `analises/${encodeURIComponent(id)}`);
   }
 
-  async decidir(id: string, decisao: string, motivo?: string): Promise<Record<string, unknown>> {
-    const corpo: Record<string, unknown> = { decisao };
-    if (motivo !== undefined) corpo.motivo = motivo;
+  /**
+   * Responde a analise que parou esperando voce (`pendencia.tipo` = `manual`).
+   *
+   * O corpo e `acao`, e nao os campos de `pendencia.campos`: aqueles
+   * descrevem o formulario que voce mostra para uma pessoa. Ate a 0.2.0 este
+   * metodo mandava `decisao`, e a api recusava toda chamada com 422.
+   *
+   * Ao aprovar, a resposta ja traz o proximo passo: quando e a prova de vida,
+   * `pendencia.url` vem aqui, e nao num webhook separado.
+   *
+   * @param acao `aprovar` ou `recusar`
+   * @param opcoes `motivo` (obrigatorio ao recusar) e `responsavel` (alguns produtos exigem)
+   */
+  async decidir(
+    id: string,
+    acao: "aprovar" | "recusar",
+    opcoes: { motivo?: string; responsavel?: string } = {},
+  ): Promise<Record<string, unknown>> {
+    const corpo: Record<string, unknown> = { acao: acao.toLowerCase() };
+    if (opcoes.motivo !== undefined) corpo.motivo = opcoes.motivo;
+    if (opcoes.responsavel !== undefined) corpo.responsavel = opcoes.responsavel;
     return this.t.pedir("POST", `analises/${encodeURIComponent(id)}/decisao`, { corpo });
   }
 

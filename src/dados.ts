@@ -50,7 +50,13 @@ export interface SessaoVerify {
   readonly resultado: string | null;
   readonly expiraEm: string | null;
   readonly referenceId: string | null;
-  /** Quanto este run custou para voce, em centavos. */
+  /** O que esta sessao custou para voce, em centavos. */
+  readonly valorCentavos: number;
+  /**
+   * O mesmo numero de `valorCentavos`.
+   *
+   * @deprecated use `valorCentavos`, o nome que a api passou a usar.
+   */
   readonly custoCentavos: number;
   /** O corpo cru, para o que o SDK nao tipou. */
   readonly cru: Record<string, unknown>;
@@ -81,6 +87,7 @@ export function paraServico(d: Record<string, unknown>): Servico {
 
 /** @internal */
 export function paraSessao(d: Record<string, unknown>): SessaoVerify {
+  const valor = Number(d.valor_total_centavos ?? d.custo_total_centavos ?? 0);
   return {
     id: String(d.session_id ?? ""),
     status: String(d.status ?? ""),
@@ -88,7 +95,10 @@ export function paraSessao(d: Record<string, unknown>): SessaoVerify {
     resultado: (d.outcome as string | null) ?? null,
     expiraEm: (d.expires_at as string | null) ?? null,
     referenceId: (d.reference_id as string | null) ?? null,
-    custoCentavos: Number(d.custo_total_centavos ?? 0),
+    // `valor_total_centavos` desde a api v0.124.0; `custo_total_centavos`
+    // sai da v2 depois do aviso aos clientes, e o SDK le os dois ate la.
+    valorCentavos: valor,
+    custoCentavos: valor,
     cru: d,
   };
 }

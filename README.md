@@ -70,9 +70,12 @@ O resultado chega por **webhook**. Dá para consultar também:
 const atual = await radar.verify.sessao(sessao.id);
 
 if (atual.status === "completed" && atual.resultado === "APROVADO") {
-  // ...
+  console.log(atual.valorCentavos);   // quanto a sessão custou para você
 }
 ```
+
+`custoCentavos` continua existindo com o mesmo número, mas está depreciado: use
+`valorCentavos`.
 
 > **Criar sessão não é idempotente.** Se der timeout, **não chame de novo às
 > cegas**: você pagaria duas sessões. Mande um `reference_id` seu e procure por
@@ -83,9 +86,56 @@ if (atual.status === "completed" && atual.resultado === "APROVADO") {
 Assíncrono: criar devolve o id, o resultado chega por webhook.
 
 ```ts
-const analise = await radar.analises.criar("kyc-pf", { cpf: "12345678909" });
+const analise = await radar.analises.criar(
+  "kyc-pf",
+  { cpf: "12345678909" },
+  {},
+  "cadastro-90321",   // um id seu: repetir não cobra de novo
+);
 const estado = await radar.analises.mostrar(String(analise.id));
 ```
+
+### Documentos
+
+Produtos que leem documentos recebem o arquivo **antes** da análise. Você envia,
+guarda o `id` e manda na entrada:
+
+```ts
+const identidade = await radar.documentos.enviar("/tmp/rg.jpg", "identidade");
+const contrato = await radar.documentos.enviar(bytesDoPdf, "contrato_social", "contrato.pdf");
+
+await radar.analises.criar("abertura-de-conta", {
+  cpf: "52998224725",
+  cnpj: "55016784000138",
+  documentos: [
+    { id: identidade.id, tipo: "identidade" },
+    { id: contrato.id, tipo: "contrato_social" },
+  ],
+});
+```
+
+Aceita caminho de arquivo (só no Node), `Blob` ou bytes. JPEG, PNG ou PDF, até
+10 MB; os tipos estão em `TIPOS_DE_DOCUMENTO`. Documento que não entra em
+análise nenhuma expira em 24 horas. O envio **não se repete sozinho**: a API
+não tem idempotência ali.
+
+### Quando a decisão é sua
+
+Quando a análise para esperando o seu time (`pendencia.tipo` = `manual` no
+evento `analise.pendente`), responda:
+
+```ts
+const r = await radar.analises.decidir(id, "aprovar", {
+  motivo: "Confirmado com o titular.",   // obrigatório ao recusar
+  responsavel: "ana@sualoja.com.br",     // alguns produtos exigem
+});
+
+// Se o próximo passo é a prova de vida, o link já vem aqui:
+const link = (r.pendencia as { url?: string } | undefined)?.url;
+```
+
+> Até a 0.2.0 este método mandava `decisao` e a API recusava toda chamada com
+> 422. A partir da 0.3.0 manda `acao`, que é o contrato da API.
 
 Um `NaoEncontrado` aqui pode querer dizer **"o Motor não está liberado para a
 sua conta"**, e não "caminho errado": enquanto ele não está liberado, nada dele
