@@ -3,7 +3,7 @@
 SDK oficial do [RadarData](https://radardata.com.br) para Node 18+, em
 TypeScript, **sem dependência em tempo de execução**. Embrulha a API pública
 (`/api/v2`): consultas, Verify (verificação de identidade), Motor de Análises,
-mensagens (SMS e WhatsApp), eventos, registro de operações e webhooks.
+mensagens (SMS, WhatsApp, Messenger e Instagram), eventos, registro de operações e webhooks.
 
 A API continua disponível para quem preferir chamá-la direto. Este pacote
 existe para você não precisar.
@@ -208,7 +208,11 @@ await radar.analises.criar("meu-kyc", { cpf: "12345678909" });
 
 Também há `listar()`, `mostrar(slug)` e `remover(slug)`.
 
-## Mensagens (SMS)
+## Mensagens
+
+SMS, WhatsApp, Messenger e Instagram saem pelo mesmo método, mudando o `canal`.
+
+### SMS
 
 Escopo `mensagens`, que **não vem ligado por padrão**: marque ao criar o token.
 Cobra por mensagem aceita; o que falha volta para o saldo.
@@ -270,6 +274,64 @@ const modelos = await radar.mensagens.modelos();   // os do número principal
 - Eventos: `mensagem.recebida` (com `texto`, `de` e `nome` de quem escreveu, para
   você responder), `mensagem.entregue`, `mensagem.lida` e `mensagem.falhou`. O
   conteúdo some da Radar Data em 30 dias.
+
+### Messenger e Instagram
+
+O mesmo método, com `canal: "messenger"` ou `canal: "instagram"`. A página do Facebook
+e o perfil profissional do Instagram são conectados no painel, pelo login da Meta.
+Aqui só se **responde**: a conversa começa quando a pessoa escreve para a página ou
+para o perfil, e a mensagem dela chega no webhook `mensagem.recebida`.
+
+Para responder, o `de` da mensagem recebida (o id da pessoa naquele canal) vai no
+`para`, e o `conexao` (a página ou o perfil que recebeu) vai no `de`:
+
+```ts
+import express from "express";
+import { type CanalDeMensagem, exigirAssinatura } from "@radardata/sdk";
+
+app.post("/radardata/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  const evento = exigirAssinatura(req.body, req.header("X-RadarData-Signature"), process.env.RADARDATA_WEBHOOK_SECRET!);
+  res.status(204).end();
+
+  if (evento.event !== "mensagem.recebida") return;
+  const recebida = evento.mensagem as { id: string; canal: CanalDeMensagem; de: string; conexao: string; texto: string | null };
+  if (recebida.canal !== "messenger" && recebida.canal !== "instagram") return;
+
+  await radar.mensagens.enviar(recebida.de, "Oi! Já vamos te atender.", {
+    canal: recebida.canal,
+    de: recebida.conexao,
+    chave: `resposta-${recebida.id}`,   // reenvio do webhook não responde duas vezes
+  });
+});
+```
+
+- **Janela de 24 horas**: só dá para responder até 24 horas depois da última
+  mensagem da pessoa. Fora dela, `EntradaInvalida` com `codigo` = `fora_da_janela`.
+  Não há modelo como no WhatsApp: quem precisa voltar a falar é a pessoa.
+- **Atendimento humano, até 7 dias**: quando quem responde é uma pessoa da sua
+  equipe, passe `etiqueta: "atendimento_humano"` e a janela vai a 7 dias. É regra da
+  Meta: não use para mensagem automática.
+
+```ts
+await radar.mensagens.enviar(recebida.de, "Conferi o seu pedido: sai amanhã.", {
+  canal: "messenger",
+  de: recebida.conexao,
+  etiqueta: "atendimento_humano",
+});
+```
+
+- Texto até 2.000 caracteres no Messenger e 1.000 no Instagram. Não há `modelo`.
+- **Cobrança**: mensalidade por página ou perfil conectado, a cada 30 dias, debitada
+  do saldo. A mensagem não é cobrada (`preco` = 0).
+- Mensalidade que não renovou por falta de saldo: `SaldoInsuficiente` com `codigo` =
+  `mensalidade_em_aberto`, e o webhook `canal.suspenso` avisa na hora (com a
+  `conexao`). A cobrança é refeita sozinha depois da recarga.
+- Sem página ou perfil conectado: `Conflito` com `canal_nao_conectado`; acesso
+  revogado na Meta: `Conflito` com `canal_sem_acesso`.
+- Na mensagem recebida, `de` é o id da pessoa e `nome` vem `null`. Nas enviadas, `para`
+  vem mascarado (`***1234`) e `conexao` diz por qual página ou perfil saiu.
+- Eventos: `mensagem.recebida`, `mensagem.entregue` (só Messenger), `mensagem.lida`,
+  `mensagem.falhou` e `canal.suspenso`.
 
 ## Eventos
 
@@ -364,7 +426,7 @@ Cada situação tem a sua classe, para você não comparar strings:
 | Classe | Quando |
 |---|---|
 | `NaoAutenticado` | 401, token ausente, inválido ou revogado |
-| `SaldoInsuficiente` | 402, a conta não tem saldo para a operação |
+| `SaldoInsuficiente` | 402, a conta não tem saldo para a operação, ou a mensalidade da página ou do perfil está em aberto (`mensalidade_em_aberto`) |
 | `SemEscopo` | 403, o token não tem o escopo daquela rota |
 | `NaoEncontrado` | 404 |
 | `Conflito` | 409, a mesma chave ainda em andamento ou usada em outro pedido |

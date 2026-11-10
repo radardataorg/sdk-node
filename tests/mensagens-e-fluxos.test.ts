@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Conflito, EntradaInvalida, ErroDoServidor, FalhaDeRede, RadarData } from "../src/index.js";
+import { Conflito, EntradaInvalida, ErroDoServidor, FalhaDeRede, RadarData, SaldoInsuficiente } from "../src/index.js";
 import { createHmac } from "node:crypto";
 
 /**
@@ -115,6 +115,48 @@ describe("whatsapp", () => {
     const modelos = await radar.mensagens.modelos("n".repeat(24));
     expect(chamadas[0]!.url).toBe(`https://api.exemplo/api/v2/mensagens/modelos?de=${"n".repeat(24)}`);
     expect(modelos[0]!.nome).toBe("pedido_enviado");
+  });
+});
+
+describe("messenger e instagram", () => {
+  const PESSOA = "24718302957461803";
+  const PAGINA = "p".repeat(24);
+
+  it("responde a mensagem recebida: `de` vira `para` e `conexao` vira `de`", async () => {
+    const recebida = { id: "m".repeat(24), canal: "messenger", direcao: "entrada", conexao: PAGINA, de: PESSOA, nome: null, texto: "oi" };
+    const { radar, chamadas } = falso([json({ data: { ...ACEITA, canal: "messenger", para: "***1803", preco: 0, conexao: PAGINA }, meta: { preco: 0 } }, 201)]);
+
+    const r = await radar.mensagens.enviar(recebida.de, "Ola, como posso ajudar?", { canal: "messenger", de: recebida.conexao });
+
+    expect(chamadas[0]!.corpo).toEqual({ canal: "messenger", para: PESSOA, texto: "Ola, como posso ajudar?", de: PAGINA });
+    expect(r.mensagem.conexao).toBe(PAGINA);
+    expect(r.meta.preco).toBe(0);
+  });
+
+  it("etiqueta atendimento_humano vai no corpo, so quando passada", async () => {
+    const { radar, chamadas } = falso([json({ data: { ...ACEITA, canal: "instagram" }, meta: {} }, 201)]);
+
+    await radar.mensagens.enviar(PESSOA, "Seguimos com o seu caso.", { canal: "instagram", etiqueta: "atendimento_humano" });
+
+    expect(chamadas[0]!.corpo).toEqual({ canal: "instagram", para: PESSOA, texto: "Seguimos com o seu caso.", etiqueta: "atendimento_humano" });
+  });
+
+  it("mensalidade da pagina em aberto vira SaldoInsuficiente com o codigo, sem repetir", async () => {
+    const { radar, chamadas } = falso([json({ error: { code: "mensalidade_em_aberto", message: "x" } }, 402)]);
+
+    await expect(radar.mensagens.enviar(PESSOA, "oi", { canal: "messenger" })).rejects.toMatchObject({
+      constructor: SaldoInsuficiente,
+      codigo: "mensalidade_em_aberto",
+    });
+    expect(chamadas).toHaveLength(1);
+  });
+
+  it("fora da janela vira EntradaInvalida com fora_da_janela", async () => {
+    const { radar } = falso([json({ error: { code: "fora_da_janela", message: "x" } }, 422)]);
+    await expect(radar.mensagens.enviar(PESSOA, "oi", { canal: "instagram" })).rejects.toMatchObject({
+      constructor: EntradaInvalida,
+      codigo: "fora_da_janela",
+    });
   });
 });
 
