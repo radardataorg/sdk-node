@@ -20,6 +20,9 @@ import { ErroRadarData, FalhaDeRede, erroDoStatus } from "./erros.js";
  *    nesse caso nao se sabe se a operacao aconteceu, e a acao correta e
  *    consultar pela chave, nao repetir as cegas.
  */
+/** Recusas que a mesma chave devolve iguais: limite atingido, ou envio que ja terminou mal. */
+const CODIGOS_FINAIS = new Set(["limite_destino", "limite_diario", "teto_excedido", "envio_incerto", "envio_recusado"]);
+
 export class Transporte {
   constructor(private readonly config: ConfigResolvida) {}
 
@@ -34,11 +37,14 @@ export class Transporte {
       envelope?: boolean;
       /** Envio de arquivo. Exclui `corpo`; o `fetch` monta o `Content-Type` com o boundary. */
       formulario?: FormData;
+      /** Cabecalhos a mais, como a assinatura do corpo em `eventos.enviar`. */
+      cabecalhos?: Record<string, string>;
     } = {},
   ): Promise<T> {
     const { corpo, query, chaveIdempotencia, envelope, formulario } = opcoes;
 
     const cabecalhos: Record<string, string> = {
+      ...opcoes.cabecalhos,
       Authorization: `Bearer ${this.config.token}`,
       Accept: "application/json",
       "User-Agent": userAgent(),
@@ -84,21 +90,44 @@ export class Transporte {
           await this.esperar(i);
           continue;
         }
-        throw ultimo;
+        throw this.comChave(ultimo, podeRepetir ? chaveIdempotencia : null);
       } finally {
         clearTimeout(relogio);
       }
 
-      // 429 e 5xx valem nova tentativa; o resto e resposta final.
-      if ((resposta.status === 429 || resposta.status >= 500) && i < tentativas) {
+      // 429 e 5xx valem nova tentativa; o resto e resposta final. Menos os codigos que a
+      // mesma chave devolve iguais: repetir so faria esperar o `Retry-After` a toa.
+      if ((resposta.status === 429 || resposta.status >= 500) && i < tentativas && !(await this.final(resposta))) {
         await this.esperar(i, resposta);
         continue;
       }
 
-      return (await this.interpretar(resposta, envelope)) as T;
+      try {
+        return (await this.interpretar(resposta, envelope)) as T;
+      } catch (e) {
+        throw this.comChave(e, podeRepetir ? chaveIdempotencia : null);
+      }
     }
 
     throw ultimo ?? new ErroRadarData("Falha desconhecida no transporte.");
+  }
+
+  /**
+   * A chave vai no erro: sem ela, quem nao passou uma propria nao tem como repetir com a
+   * mesma, e gerar outra mandaria de novo o que talvez ja tenha saido.
+   */
+  private comChave(e: unknown, chave: string | null | undefined): unknown {
+    if (e instanceof ErroRadarData && chave) e.chaveIdempotencia = chave;
+    return e;
+  }
+
+  private async final(resposta: Response): Promise<boolean> {
+    try {
+      const corpo = (await resposta.clone().json()) as { error?: { code?: string } };
+      return CODIGOS_FINAIS.has(corpo?.error?.code ?? "");
+    } catch {
+      return false;
+    }
   }
 
   private async interpretar(resposta: Response, envelope = false): Promise<unknown> {
