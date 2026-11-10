@@ -29,4 +29,14 @@ export class Consultas {
       chaveIdempotencia: chave ?? chaveIdempotencia(),
     });
   }
+
+  /**
+   * O resultado de uma consulta demorada, pelo `consulta_id` que a criacao ou o webhook
+   * `consulta.concluida` devolveu. Vem o corpo inteiro: o estado fica sempre em
+   * `meta.status` (`em_andamento`, `concluida`, `erro` ou `expirada`), e um erro terminal
+   * chega aqui como resposta, em `error`, e nao como excecao.
+   */
+  async resultado(id: string): Promise<Record<string, unknown>> {
+    return this.t.pedir("GET", `consultas/${encodeURIComponent(id)}`, { envelope: true });
+  }
 }

@@ -2,8 +2,8 @@
 
 SDK oficial do [RadarData](https://radardata.com.br) para Node 18+, em
 TypeScript, **sem dependência em tempo de execução**. Embrulha a API pública
-(`/api/v2`): consultas, Verify (verificação de identidade), Motor de Análises e
-webhooks.
+(`/api/v2`): consultas, Verify (verificação de identidade), Motor de Análises,
+mensagens (SMS) e webhooks.
 
 A API continua disponível para quem preferir chamá-la direto. Este pacote
 existe para você não precisar.
@@ -43,6 +43,17 @@ const resultado = await radar.consultas.executar("cpf", "12345678909");
 Gasta saldo. O retorno não é tipado porque cada serviço devolve um corpo
 diferente e a lista cresce: tipar tudo aqui faria o SDK desatualizar a cada
 serviço novo sem ninguém perceber.
+
+Consulta demorada responde que está em andamento e avisa pelo webhook
+`consulta.concluida`. O resultado sai pelo `consulta_id`:
+
+```ts
+const r = await radar.consultas.resultado(consultaId);
+// r.meta.status: em_andamento | concluida | erro | expirada; o dado em r.data
+```
+
+Erro terminal chega aqui como resposta, em `r.error`, e não como exceção: a
+consulta existe, o que falhou foi ela.
 
 Para saber o que a **sua** conta pode consultar, e por quanto:
 
@@ -141,6 +152,49 @@ Um `NaoEncontrado` aqui pode querer dizer **"o Motor não está liberado para a
 sua conta"**, e não "caminho errado": enquanto ele não está liberado, nada dele
 aparece para o cliente, de propósito.
 
+### Seus próprios fluxos
+
+Quem monta o pipeline por código usa `radar.fluxos`, com um token de escopo
+`fluxos`, separado do de `analises` de propósito:
+
+```ts
+const { preco } = await radar.fluxos.validar(definicao, "PF");   // não grava nada
+await radar.fluxos.publicar("meu-kyc", "Meu KYC", "PF", definicao); // mesma definição não cria versão nova
+await radar.analises.criar("meu-kyc", { cpf: "12345678909" });
+```
+
+Também há `listar()`, `mostrar(slug)` e `remover(slug)`.
+
+## Mensagens (SMS)
+
+Escopo `mensagens`, que **não vem ligado por padrão**: marque ao criar o token.
+Cobra por mensagem aceita; o que falha volta para o saldo.
+
+```ts
+const { mensagem, meta } = await radar.mensagens.enviar(
+  "+5511999999999",
+  "Seu código de acesso é 482913.",
+  { chave: "pedido-48213-codigo" },   // repetir com a mesma chave não manda de novo
+);
+
+mensagem.status;   // "aceita": saiu para a operadora
+meta.saldo;        // em centavos
+```
+
+- Até 160 caracteres. **Acento sai** antes do envio e **emoji recusa** a
+  mensagem (`EntradaInvalida`, `codigo` = `texto_invalido`), sem cobrar.
+- `aceita` não é entrega confirmada: para código de acesso, ofereça reenviar.
+- `envio_incerto` (`ErroDoServidor`, 504): não confirmamos se saiu e não foi
+  cobrado. Reenviar com chave nova pode fazer a pessoa receber duas.
+- `limite_destino` e `limite_diario` (`MuitasTentativas`): 5 por número por
+  hora e 1.000 por conta por dia.
+- O aviso chega pelos webhooks `mensagem.aceita` e `mensagem.falhou`.
+
+```ts
+const { data, meta: paginacao } = await radar.mensagens.listar(1, 25); // sem o texto
+const uma = await radar.mensagens.obter(id);                           // com o texto, por 30 dias
+```
+
 ## Monitoramentos judiciais
 
 Cobrança adiantada a cada 30 dias. A novidade chega pelo webhook
@@ -225,7 +279,7 @@ grupo de webhooks tem teto próprio. Ao passar do teto vem `MuitasTentativas`
 ## Repetição automática, e por que ela não é global
 
 O SDK repete em 429 e 5xx **somente** nas chamadas em que manda
-`Idempotency-Key`: consultas, análises e operações. A mesma chave faz a API
+`Idempotency-Key`: consultas, análises, mensagens e operações. A mesma chave faz a API
 devolver a resposta anterior em vez de cobrar de novo.
 
 Criar sessão de Verify **não** tem idempotência na API, então o SDK **não
@@ -260,6 +314,9 @@ npm install
 npm test
 npm run typecheck
 npm run build
+
+# contrato contra uma api de verdade, com token de SANDBOX
+RADARDATA_CONTRATO_BASE=http://127.0.0.1:8000/api/v2 RADARDATA_CONTRATO_TOKEN=... npm run contrato
 ```
 
 ## Licença
