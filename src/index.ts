@@ -1,6 +1,7 @@
 import { type Configuracao, resolver } from "./configuracao.js";
 import { Analises } from "./recursos/analises.js";
 import { Catalogo } from "./recursos/catalogo.js";
+import { Certificados } from "./recursos/certificados.js";
 import { Consultas } from "./recursos/consultas.js";
 import { Fluxos } from "./recursos/fluxos.js";
 import { Mensagens } from "./recursos/mensagens.js";
@@ -53,6 +54,9 @@ export class RadarData {
 
   readonly monitoramentosJudiciais: MonitoramentosJudiciais;
 
+  /** Certificado digital da empresa, para os autos do processo. Escopo `certificados`, so do ADMIN. */
+  readonly certificados: Certificados;
+
   readonly webhooks: Webhooks;
 
   constructor(config: Configuracao) {
@@ -68,11 +72,12 @@ export class RadarData {
     this.fluxos = new Fluxos(t);
     this.mensagens = new Mensagens(t);
     this.monitoramentosJudiciais = new MonitoramentosJudiciais(t);
+    this.certificados = new Certificados(t);
     this.webhooks = new Webhooks(t);
   }
 }
 
-export { chaveIdempotencia } from "./transporte.js";
+export { type Arquivo, chaveIdempotencia } from "./transporte.js";
 export { confereAssinatura, exigirAssinatura } from "./webhooks/assinatura.js";
 export { emReais } from "./dados.js";
 export type { Configuracao } from "./configuracao.js";
@@ -90,6 +95,7 @@ export {
   SemEscopo,
 } from "./erros.js";
 export { Analises } from "./recursos/analises.js";
+export { type Autenticacao, Certificados } from "./recursos/certificados.js";
 export { Catalogo } from "./recursos/catalogo.js";
 export { Consultas } from "./recursos/consultas.js";
 export { Documentos, TIPOS_DE_DOCUMENTO, type TipoDeDocumento } from "./recursos/documentos.js";

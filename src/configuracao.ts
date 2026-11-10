@@ -16,7 +16,7 @@ export interface Configuracao {
   fetch?: typeof globalThis.fetch;
 }
 
-export const VERSAO = "0.4.0";
+export const VERSAO = "0.5.0";
 
 /** @internal */
 export interface ConfigResolvida extends Required<Omit<Configuracao, "fetch">> {
