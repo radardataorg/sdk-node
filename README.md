@@ -55,6 +55,49 @@ const r = await radar.consultas.resultado(consultaId);
 Erro terminal chega aqui como resposta, em `r.error`, e não como exceção: a
 consulta existe, o que falhou foi ela.
 
+### Documentos do processo
+
+`processo-documentos-publicos` e `processo-autos` são consultas demoradas. O
+resultado traz `documentos`, cada um com um `id` para baixar. O download não
+cobra: o valor foi o da consulta.
+
+```ts
+import { writeFile } from "node:fs/promises";
+
+const { data } = await radar.consultas.resultado(consultaId);
+for (const d of data.documentos as { id: string }[]) {
+  const arquivo = await radar.consultas.baixarDocumento(d.id); // { conteudo, tipo, nome }
+  await writeFile(arquivo.nome, arquivo.conteudo);
+}
+```
+
+Os autos pedem o certificado digital da sua empresa no campo `certificado`:
+
+```ts
+await radar.consultas.executar("processo-autos", "0018063-19.2013.8.26.0002", { certificado: certificadoId });
+```
+
+### Certificado digital
+
+Escopo `certificados`, que só o administrador da conta concede, e só com token
+de produção. O arquivo e a senha não voltam em nenhuma resposta, e cada
+certificado serve só à sua empresa.
+
+```ts
+const c = await radar.certificados.cadastrar("/caminho/escritorio.pfx", process.env.SENHA_DO_PFX!, {
+  nome: "Escritório SP",
+  // Só para tribunais que pedem código do aplicativo autenticador.
+  autenticacoes: [{ tribunal: "TRF2", sistemas: ["EPROC-TRF2"], secret_2fa: process.env.SEGREDO_2FA! }],
+});
+const certificadoId = String(c.id);
+
+await radar.certificados.listar();
+await radar.certificados.remover(certificadoId);
+```
+
+Mandar o mesmo arquivo de novo devolve o certificado que já existe. O envio
+não é repetido sozinho em erro.
+
 Para saber o que a **sua** conta pode consultar, e por quanto:
 
 ```ts
@@ -262,6 +305,15 @@ Cobrança adiantada a cada 30 dias. A novidade chega pelo webhook
 const m = await radar.monitoramentosJudiciais.criar("monitoramento-documento", { documento: "12345678909", nome: "Fornecedor principal" });
 const { data: eventos, meta } = await radar.monitoramentosJudiciais.eventos(String(m.id)); // meta.paginas
 await radar.monitoramentosJudiciais.cancelar(String(m.id)); // vale até o fim do período pago
+```
+
+O aviso de diário oficial traz `conteudo.pagina_pdf` quando o diário informa a
+página:
+
+```ts
+if (evento.conteudo.pagina_pdf) {
+  const pdf = await radar.monitoramentosJudiciais.paginaDoDiario(evento.conteudo.pagina_pdf);
+}
 ```
 
 No catálogo, `servico.monitoramento` diz quais serviços se usam assim, e
