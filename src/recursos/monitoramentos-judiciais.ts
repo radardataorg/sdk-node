@@ -1,4 +1,4 @@
-import type { Transporte } from "../transporte.js";
+import type { Arquivo, Transporte } from "../transporte.js";
 
 /** Uma pagina: os itens e a paginacao (`pagina`, `paginas`, `total`). */
 export interface Pagina {
@@ -48,5 +48,13 @@ export class MonitoramentosJudiciais {
       query: { page: pagina, per_page: porPagina },
       envelope: true,
     });
+  }
+
+  /**
+   * PDF da pagina do diario em que saiu um aviso, pelo `conteudo.pagina_pdf` do evento.
+   * Vem nulo quando o diario nao informa a pagina.
+   */
+  async paginaDoDiario(id: string): Promise<Arquivo> {
+    return this.t.pedir<Arquivo>("GET", `diarios/paginas/${encodeURIComponent(id)}`, { binario: true });
   }
 }

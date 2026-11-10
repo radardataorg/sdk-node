@@ -1,4 +1,4 @@
-import { type Transporte, chaveIdempotencia } from "../transporte.js";
+import { type Arquivo, type Transporte, chaveIdempotencia } from "../transporte.js";
 
 /**
  * Consultas. Escopo `consultas`. GASTA SALDO.
@@ -38,5 +38,14 @@ export class Consultas {
    */
   async resultado(id: string): Promise<Record<string, unknown>> {
     return this.t.pedir("GET", `consultas/${encodeURIComponent(id)}`, { envelope: true });
+  }
+
+  /**
+   * Baixa um documento de processo pelo `id` da lista `documentos` de uma consulta de
+   * documentos publicos ou de autos. Nao cobra: o valor foi o da consulta. Grave o
+   * `conteudo` num arquivo seu; o `nome` ja vem com a extensao.
+   */
+  async baixarDocumento(id: string): Promise<Arquivo> {
+    return this.t.pedir<Arquivo>("GET", `processos/documentos/${encodeURIComponent(id)}`, { binario: true });
   }
 }

@@ -39,6 +39,8 @@ export class Transporte {
       formulario?: FormData;
       /** Cabecalhos a mais, como a assinatura do corpo em `eventos.enviar`. */
       cabecalhos?: Record<string, string>;
+      /** Download: a resposta de sucesso sao bytes, e vem como `Arquivo`. Erro continua JSON. */
+      binario?: boolean;
     } = {},
   ): Promise<T> {
     const { corpo, query, chaveIdempotencia, envelope, formulario } = opcoes;
@@ -100,6 +102,10 @@ export class Transporte {
       if ((resposta.status === 429 || resposta.status >= 500) && i < tentativas && !(await this.final(resposta))) {
         await this.esperar(i, resposta);
         continue;
+      }
+
+      if (opcoes.binario && resposta.ok) {
+        return (await paraArquivo(resposta)) as T;
       }
 
       try {
@@ -169,6 +175,23 @@ export class Transporte {
     const base = Math.min(8, 2 ** (tentativa - 1));
     await new Promise((r) => setTimeout(r, base * 1000 + Math.random() * 250));
   }
+}
+
+/** Um arquivo baixado: os bytes, o tipo e o nome que a api sugere. */
+export interface Arquivo {
+  readonly conteudo: Uint8Array;
+  readonly tipo: string;
+  readonly nome: string;
+}
+
+async function paraArquivo(resposta: Response): Promise<Arquivo> {
+  const disposicao = resposta.headers.get("content-disposition") ?? "";
+  const nome = /filename="?([^";]+)"?/i.exec(disposicao)?.[1] ?? "documento";
+  return {
+    conteudo: new Uint8Array(await resposta.arrayBuffer()),
+    tipo: (resposta.headers.get("content-type") ?? "application/octet-stream").split(";")[0]!.trim(),
+    nome,
+  };
 }
 
 /** Chave nova de idempotencia, no formato que a api aceita. */
