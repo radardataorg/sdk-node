@@ -7,6 +7,13 @@
  * um `catch` especifico, em vez de obrigar quem integra a comparar strings.
  */
 export class ErroRadarData extends Error {
+  /**
+   * A chave de idempotencia usada, quando houve uma. Depois de `FalhaDeRede`, `Conflito`
+   * ou `envio_incerto`, repita com ELA, e nao com uma nova: a nova pode cobrar ou mandar
+   * de novo o que ja saiu.
+   */
+  chaveIdempotencia: string | null = null;
+
   constructor(
     mensagem: string,
     readonly codigo: string | null = null,
@@ -33,6 +40,12 @@ export class SemEscopo extends ErroRadarData {}
 /** 404, recurso inexistente ou de outra empresa. */
 export class NaoEncontrado extends ErroRadarData {}
 
+/**
+ * 409. Com a mesma chave: `idempotency_em_processamento` (a primeira ainda esta rodando,
+ * espere e repita com a mesma chave) ou `idempotency_conflito` (a chave ja foi usada em
+ * outro pedido).
+ */
+export class Conflito extends ErroRadarData {}
 /** 422, o que foi enviado nao passou na validacao. Veja `corpo`. */
 export class EntradaInvalida extends ErroRadarData {}
 
@@ -63,6 +76,7 @@ export function erroDoStatus(
   if (status === 402) return new SaldoInsuficiente(mensagem, codigo, status, corpo);
   if (status === 403) return new SemEscopo(mensagem, codigo, status, corpo);
   if (status === 404) return new NaoEncontrado(mensagem, codigo, status, corpo);
+  if (status === 409) return new Conflito(mensagem, codigo, status, corpo);
   if (status === 422) return new EntradaInvalida(mensagem, codigo, status, corpo);
   if (status === 429) return new MuitasTentativas(mensagem, codigo, status, corpo);
   if (status >= 500) return new ErroDoServidor(mensagem, codigo, status, corpo);

@@ -3,7 +3,7 @@
 SDK oficial do [RadarData](https://radardata.com.br) para Node 18+, em
 TypeScript, **sem dependência em tempo de execução**. Embrulha a API pública
 (`/api/v2`): consultas, Verify (verificação de identidade), Motor de Análises,
-mensagens (SMS) e webhooks.
+mensagens (SMS), eventos, registro de operações e webhooks.
 
 A API continua disponível para quem preferir chamá-la direto. Este pacote
 existe para você não precisar.
@@ -189,10 +189,40 @@ meta.saldo;        // em centavos
 - `limite_destino` e `limite_diario` (`MuitasTentativas`): 5 por número por
   hora e 1.000 por conta por dia.
 - O aviso chega pelos webhooks `mensagem.aceita` e `mensagem.falhou`.
+- **A resposta se perdeu?** O erro traz a chave usada em `erro.chaveIdempotencia`.
+  Repita com **ela**: `Conflito` (`idempotency_em_processamento`) quer dizer que
+  a primeira ainda está saindo; espere e repita com a mesma chave. Chave nova
+  pode fazer a pessoa receber duas. Para código de acesso, passe sempre uma
+  chave sua.
 
 ```ts
 const { data, meta: paginacao } = await radar.mensagens.listar(1, 25); // sem o texto
 const uma = await radar.mensagens.obter(id);                           // com o texto, por 30 dias
+```
+
+## Eventos
+
+O seu sistema conta o que aconteceu e a configuração do lado da RadarData
+decide que análises acordam. Evento sem gatilho configurado não é erro.
+
+```ts
+const r = await radar.eventos.enviar("pedido.criado", `pedido-${pedido.id}`, { valor: 15000 }, {
+  segredo: process.env.RADARDATA_EVENTOS_SECRET,  // quando a origem exige assinatura
+});
+```
+
+## Operações (COAF)
+
+Para factoring: cada operação registrada é conferida, e a que precisa de olhar
+humano volta com `revisar`.
+
+```ts
+const op = await radar.operacoes.registrar(
+  { cliente_documento: "11222333000181", sacado_documento: "52998224725", valor: 150000 },
+  `operacao-${titulo}`,   // repetir não cobra de novo
+);
+const pendentes = await radar.operacoes.listar({ revisar: true });
+await radar.operacoes.decidir(String(op.id), "ARQUIVAR", "Operação conferida com o cliente.");
 ```
 
 ## Monitoramentos judiciais
@@ -257,6 +287,7 @@ Cada situação tem a sua classe, para você não comparar strings:
 | `SaldoInsuficiente` | 402, a conta não tem saldo para a operação |
 | `SemEscopo` | 403, o token não tem o escopo daquela rota |
 | `NaoEncontrado` | 404 |
+| `Conflito` | 409, a mesma chave ainda em andamento ou usada em outro pedido |
 | `EntradaInvalida` | 422, veja `.corpo` para os campos |
 | `MuitasTentativas` | 429, teto de chamadas |
 | `ErroDoServidor` | 5xx, falha nossa |
@@ -279,8 +310,11 @@ grupo de webhooks tem teto próprio. Ao passar do teto vem `MuitasTentativas`
 ## Repetição automática, e por que ela não é global
 
 O SDK repete em 429 e 5xx **somente** nas chamadas em que manda
-`Idempotency-Key`: consultas, análises, mensagens e operações. A mesma chave faz a API
-devolver a resposta anterior em vez de cobrar de novo.
+`Idempotency-Key`: consultas, análises, mensagens, eventos e operações. A mesma
+chave faz a API devolver a resposta anterior em vez de cobrar de novo. Não
+repete o que a mesma chave devolveria igual (`limite_destino`, `limite_diario`,
+`teto_excedido`, `envio_incerto`, `envio_recusado`), e todo erro traz a chave
+usada em `erro.chaveIdempotencia`.
 
 Criar sessão de Verify **não** tem idempotência na API, então o SDK **não
 repete** ali, qualquer que seja a configuração. Repetir criaria uma segunda

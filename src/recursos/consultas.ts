@@ -26,7 +26,7 @@ export class Consultas {
   ): Promise<Record<string, unknown>> {
     return this.t.pedir("POST", slug, {
       corpo: { documento, ...extras },
-      chaveIdempotencia: chave ?? chaveIdempotencia(),
+      chaveIdempotencia: chave || chaveIdempotencia(),
     });
   }
 

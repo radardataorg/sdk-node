@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { EntradaInvalida, RadarData } from "../src/index.js";
+import { Conflito, EntradaInvalida, ErroDoServidor, FalhaDeRede, RadarData } from "../src/index.js";
+import { createHmac } from "node:crypto";
 
 /**
  * Mensagens, fluxos do Motor e o resultado de consulta demorada (D-0130): o que a v2 tinha
@@ -7,7 +8,7 @@ import { EntradaInvalida, RadarData } from "../src/index.js";
  * mensagem em vez de mandar de novo.
  */
 function falso(respostas: Array<() => Response>) {
-  const chamadas: { url: string; metodo: string; cabecalhos: Record<string, string>; corpo: unknown }[] = [];
+  const chamadas: { url: string; metodo: string; cabecalhos: Record<string, string>; corpo: unknown; cru: string | null }[] = [];
   let i = 0;
   const radar = new RadarData({
     token: "tok",
@@ -19,6 +20,7 @@ function falso(respostas: Array<() => Response>) {
         metodo: init?.method ?? "GET",
         cabecalhos: (init?.headers ?? {}) as Record<string, string>,
         corpo: init?.body ? JSON.parse(String(init.body)) : null,
+        cru: init?.body ? String(init.body) : null,
       });
       return respostas[Math.min(i++, respostas.length - 1)]!();
     }) as typeof globalThis.fetch,
@@ -80,6 +82,90 @@ describe("mensagens", () => {
     expect(pagina.meta.total).toBe(51);
     expect(chamadas[1]!.url).toBe(`https://api.exemplo/api/v2/mensagens/${ACEITA.id}`);
     expect(uma.texto).toBe("oi");
+  });
+});
+
+describe("mensagens: repetir com seguranca", () => {
+  it("resposta perdida e depois 409: Conflito, com a chave no erro", async () => {
+    const { radar, chamadas } = falso([
+      () => {
+        throw new TypeError("fetch failed");
+      },
+      json({ error: { code: "idempotency_em_processamento", message: "x" } }, 409),
+    ]);
+
+    const erro = await radar.mensagens.enviar("11999999999", "oi").catch((e) => e);
+
+    expect(erro).toBeInstanceOf(Conflito);
+    expect(erro.codigo).toBe("idempotency_em_processamento");
+    expect(erro.chaveIdempotencia).toBe(chamadas[0]!.cabecalhos["Idempotency-Key"]);
+    expect(chamadas[1]!.cabecalhos["Idempotency-Key"]).toBe(chamadas[0]!.cabecalhos["Idempotency-Key"]);
+  });
+
+  it("falha de rede em todas as tentativas tambem leva a chave", async () => {
+    const { radar } = falso([
+      () => {
+        throw new TypeError("fetch failed");
+      },
+    ]);
+
+    const erro = await radar.mensagens.enviar("11999999999", "oi", { chave: "minha" }).catch((e) => e);
+
+    expect(erro).toBeInstanceOf(FalhaDeRede);
+    expect(erro.chaveIdempotencia).toBe("minha");
+  });
+
+  it("chave vazia gera uma, em vez de mandar sem idempotencia", async () => {
+    const { radar, chamadas } = falso([json({ data: ACEITA, meta: {} }, 201)]);
+
+    await radar.mensagens.enviar("11999999999", "oi", { chave: "" });
+
+    expect(chamadas[0]!.cabecalhos["Idempotency-Key"]).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it("envio_incerto e limite_destino nao sao repetidos, porque voltam iguais", async () => {
+    for (const [status, codigo] of [[504, "envio_incerto"], [429, "limite_destino"]] as const) {
+      const { radar, chamadas } = falso([json({ error: { code: codigo, message: "x" } }, status)]);
+      const erro = await radar.mensagens.enviar("11999999999", "oi").catch((e) => e);
+      expect(erro.codigo).toBe(codigo);
+      expect(chamadas).toHaveLength(1);
+    }
+    const { radar } = falso([json({ error: { code: "envio_incerto", message: "x" } }, 504)]);
+    await expect(radar.mensagens.enviar("11999999999", "oi")).rejects.toBeInstanceOf(ErroDoServidor);
+  });
+});
+
+describe("eventos e operacoes", () => {
+  it("evento assinado com o segredo, sobre o corpo exato que sai", async () => {
+    const { radar, chamadas } = falso([json({ data: { repetido: false, analises: [] }, avisos: [] }, 202)]);
+
+    await radar.eventos.enviar("pedido.criado", "pedido-9", { valor: 100 }, { segredo: "s3gr3do" });
+
+    const c = chamadas[0]!;
+    expect(c.url).toBe("https://api.exemplo/api/v2/eventos");
+    expect(c.corpo).toEqual({ evento: "pedido.criado", chave: "pedido-9", dados: { valor: 100 } });
+    expect(c.cabecalhos["X-RadarData-Signature"]).toBe(`sha256=${createHmac("sha256", "s3gr3do").update(c.cru!).digest("hex")}`);
+    expect(c.cabecalhos.Authorization).toBe("Bearer tok");
+  });
+
+  it("evento sem segredo vai sem assinatura", async () => {
+    const { radar, chamadas } = falso([json({ data: {} }, 202)]);
+    await radar.eventos.enviar("pedido.criado", "pedido-9");
+    expect(chamadas[0]!.cabecalhos["X-RadarData-Signature"]).toBeUndefined();
+  });
+
+  it("operacoes: registra com chave, lista com filtros, mostra e decide", async () => {
+    const { radar, chamadas } = falso([json({ data: { id: "o1" } }, 201)]);
+
+    await radar.operacoes.registrar({ cliente_documento: "11222333000181", sacado_documento: "52998224725", valor: 150000 }, "op-1");
+    await radar.operacoes.listar({ pagina: 2, revisar: true, de: "2026-11-01" });
+    await radar.operacoes.mostrar("o1");
+    await radar.operacoes.decidir("o1", "ARQUIVAR", "Operacao conferida com o cliente.");
+
+    expect(chamadas[0]!.cabecalhos["Idempotency-Key"]).toBe("op-1");
+    expect(chamadas[1]!.url).toBe("https://api.exemplo/api/v2/operacoes?page=2&revisar=1&de=2026-11-01");
+    expect(chamadas[2]!.url).toBe("https://api.exemplo/api/v2/operacoes/o1");
+    expect(chamadas[3]!.corpo).toEqual({ decisao: "ARQUIVAR", motivo: "Operacao conferida com o cliente." });
   });
 });
 

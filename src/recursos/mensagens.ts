@@ -42,7 +42,7 @@ export class Mensagens {
   ): Promise<EnvioDeMensagem> {
     const r = await this.t.pedir<{ data: Record<string, unknown>; meta: EnvioDeMensagem["meta"] }>("POST", "mensagens", {
       corpo: { canal: opcoes.canal ?? "sms", para, texto },
-      chaveIdempotencia: opcoes.chave ?? chaveIdempotencia(),
+      chaveIdempotencia: opcoes.chave || chaveIdempotencia(),
       envelope: true,
     });
     return { mensagem: r.data, meta: r.meta ?? {} };

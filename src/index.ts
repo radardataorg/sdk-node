@@ -5,7 +5,9 @@ import { Consultas } from "./recursos/consultas.js";
 import { Fluxos } from "./recursos/fluxos.js";
 import { Mensagens } from "./recursos/mensagens.js";
 import { Documentos } from "./recursos/documentos.js";
+import { Eventos } from "./recursos/eventos.js";
 import { MonitoramentosJudiciais } from "./recursos/monitoramentos-judiciais.js";
+import { Operacoes } from "./recursos/operacoes.js";
 import { Verify } from "./recursos/verify.js";
 import { Webhooks } from "./recursos/webhooks.js";
 import { Transporte } from "./transporte.js";
@@ -37,6 +39,12 @@ export class RadarData {
   /** Documentos que entram numa analise, enviados antes dela. Escopo `analises`. */
   readonly documentos: Documentos;
 
+  /** Gatilho por evento: seu sistema conta o que aconteceu e as analises acordam. Escopo `analises`. */
+  readonly eventos: Eventos;
+
+  /** Registro de operacao para o COAF (factoring). Escopo `analises`. */
+  readonly operacoes: Operacoes;
+
   /** Seus proprios fluxos de analise, provisionados por codigo. Escopo `fluxos`. */
   readonly fluxos: Fluxos;
 
@@ -55,6 +63,8 @@ export class RadarData {
     this.verify = new Verify(t);
     this.analises = new Analises(t);
     this.documentos = new Documentos(t);
+    this.eventos = new Eventos(t);
+    this.operacoes = new Operacoes(t);
     this.fluxos = new Fluxos(t);
     this.mensagens = new Mensagens(t);
     this.monitoramentosJudiciais = new MonitoramentosJudiciais(t);
@@ -68,6 +78,7 @@ export { emReais } from "./dados.js";
 export type { Configuracao } from "./configuracao.js";
 export type { Saldo, Servico, SessaoVerify } from "./dados.js";
 export {
+  Conflito,
   EntradaInvalida,
   ErroDoServidor,
   ErroRadarData,
@@ -82,7 +93,9 @@ export { Analises } from "./recursos/analises.js";
 export { Catalogo } from "./recursos/catalogo.js";
 export { Consultas } from "./recursos/consultas.js";
 export { Documentos, TIPOS_DE_DOCUMENTO, type TipoDeDocumento } from "./recursos/documentos.js";
+export { Eventos } from "./recursos/eventos.js";
 export { Fluxos } from "./recursos/fluxos.js";
+export { type NovaOperacao, Operacoes } from "./recursos/operacoes.js";
 export { type EnvioDeMensagem, Mensagens } from "./recursos/mensagens.js";
 export { MonitoramentosJudiciais, type Pagina } from "./recursos/monitoramentos-judiciais.js";
 export { Verify } from "./recursos/verify.js";

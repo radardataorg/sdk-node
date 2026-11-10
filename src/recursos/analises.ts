@@ -27,7 +27,7 @@ export class Analises {
   ): Promise<Record<string, unknown>> {
     return this.t.pedir("POST", `analises/${encodeURIComponent(slug)}`, {
       corpo: { campos, ...opcoes },
-      chaveIdempotencia: chave ?? chaveIdempotencia(),
+      chaveIdempotencia: chave || chaveIdempotencia(),
     });
   }
 
