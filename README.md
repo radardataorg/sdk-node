@@ -3,7 +3,7 @@
 SDK oficial do [RadarData](https://radardata.com.br) para Node 18+, em
 TypeScript, **sem dependência em tempo de execução**. Embrulha a API pública
 (`/api/v2`): consultas, Verify (verificação de identidade), Motor de Análises,
-mensagens (SMS), eventos, registro de operações e webhooks.
+mensagens (SMS e WhatsApp), eventos, registro de operações e webhooks.
 
 A API continua disponível para quem preferir chamá-la direto. Este pacote
 existe para você não precisar.
@@ -242,6 +242,34 @@ meta.saldo;        // em centavos
 const { data, meta: paginacao } = await radar.mensagens.listar(1, 25); // sem o texto
 const uma = await radar.mensagens.obter(id);                           // com o texto, por 30 dias
 ```
+
+### WhatsApp
+
+O mesmo método, com `canal: "whatsapp"`. O número da empresa é conectado no painel,
+pelo cadastro da própria Meta, e o envio sai pelo principal ou pelo que você indicar
+em `de`.
+
+```ts
+// Responder dentro de 24 horas da última mensagem da pessoa: texto livre, sem cobrança.
+await radar.mensagens.enviar("+5511999999999", "Seu pedido saiu para entrega.", { canal: "whatsapp" });
+
+// Fora da janela, só modelo aprovado na Meta. É o que é cobrado.
+await radar.mensagens.enviar("+5511999999999", null, {
+  canal: "whatsapp",
+  modelo: { nome: "pedido_enviado", idioma: "pt_BR", parametros: ["Maria", "48213"] },
+  chave: "pedido-48213-aviso",
+});
+
+const modelos = await radar.mensagens.modelos();   // os do número principal
+```
+
+- Texto livre até 4096 caracteres, com emoji e acento.
+- Fora da janela sem modelo: `EntradaInvalida` com `codigo` = `fora_da_janela`.
+- Sem número conectado: `Conflito` com `canal_nao_conectado`.
+- A Meta cobra a conversa direto na conta de WhatsApp do cliente.
+- Eventos: `mensagem.recebida` (com `texto`, `de` e `nome` de quem escreveu, para
+  você responder), `mensagem.entregue`, `mensagem.lida` e `mensagem.falhou`. O
+  conteúdo some da Radar Data em 30 dias.
 
 ## Eventos
 

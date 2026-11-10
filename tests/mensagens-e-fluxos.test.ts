@@ -85,6 +85,39 @@ describe("mensagens", () => {
   });
 });
 
+describe("whatsapp", () => {
+  it("modelo vai no lugar do texto, com idioma padrao e o numero de saida", async () => {
+    const { radar, chamadas } = falso([json({ data: { ...ACEITA, canal: "whatsapp" }, meta: { preco: 30 } }, 201)]);
+
+    await radar.mensagens.enviar("+5519984250269", null, {
+      canal: "whatsapp",
+      de: "n".repeat(24),
+      modelo: { nome: "pedido_enviado", parametros: ["Maria", "48213"] },
+      chave: "pedido-1",
+    });
+
+    expect(chamadas[0]!.corpo).toEqual({
+      canal: "whatsapp",
+      para: "+5519984250269",
+      de: "n".repeat(24),
+      modelo: { idioma: "pt_BR", parametros: ["Maria", "48213"], nome: "pedido_enviado" },
+    });
+  });
+
+  it("texto livre manda o texto e sem `de` deixa a api escolher o principal", async () => {
+    const { radar, chamadas } = falso([json({ data: ACEITA, meta: {} }, 201)]);
+    await radar.mensagens.enviar("19984250269", "Saiu para entrega", { canal: "whatsapp" });
+    expect(chamadas[0]!.corpo).toEqual({ canal: "whatsapp", para: "19984250269", texto: "Saiu para entrega" });
+  });
+
+  it("lista os modelos do numero", async () => {
+    const { radar, chamadas } = falso([json({ data: [{ nome: "pedido_enviado", status: "approved", parametros: 2 }] })]);
+    const modelos = await radar.mensagens.modelos("n".repeat(24));
+    expect(chamadas[0]!.url).toBe(`https://api.exemplo/api/v2/mensagens/modelos?de=${"n".repeat(24)}`);
+    expect(modelos[0]!.nome).toBe("pedido_enviado");
+  });
+});
+
 describe("mensagens: repetir com seguranca", () => {
   it("resposta perdida e depois 409: Conflito, com a chave no erro", async () => {
     const { radar, chamadas } = falso([
