@@ -96,7 +96,7 @@ export { Documentos, TIPOS_DE_DOCUMENTO, type TipoDeDocumento } from "./recursos
 export { Eventos } from "./recursos/eventos.js";
 export { Fluxos } from "./recursos/fluxos.js";
 export { type NovaOperacao, Operacoes } from "./recursos/operacoes.js";
-export { type EnvioDeMensagem, Mensagens } from "./recursos/mensagens.js";
+export { type EnvioDeMensagem, Mensagens, type ModeloDeMensagem } from "./recursos/mensagens.js";
 export { MonitoramentosJudiciais, type Pagina } from "./recursos/monitoramentos-judiciais.js";
 export { Verify } from "./recursos/verify.js";
 export { Webhooks } from "./recursos/webhooks.js";

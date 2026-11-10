@@ -47,6 +47,12 @@ describe.skipIf(!base || !token)("contrato com a api", () => {
     expect(uma.texto).toBe("Contrato do SDK: acao");
   });
 
+  it("whatsapp: modelo em sandbox e aceito sem numero conectado", async () => {
+    const r = await radar.mensagens.enviar("+5511900000000", null, { canal: "whatsapp", modelo: { nome: "contrato_teste", parametros: ["a"] } });
+    expect(r.meta.sandbox).toBe(true);
+    expect(r.mensagem.canal).toBe("whatsapp");
+  });
+
   it("mensagens: emoji volta EntradaInvalida com texto_invalido", async () => {
     await expect(radar.mensagens.enviar("+5511900000000", "oi \u{1F600}")).rejects.toMatchObject({
       constructor: EntradaInvalida,

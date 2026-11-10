@@ -9,8 +9,17 @@ export interface EnvioDeMensagem {
   readonly meta: { saldo?: number; preco?: number; sandbox?: boolean };
 }
 
+/** Um modelo de WhatsApp aprovado na Meta: obrigatorio fora da janela de 24 horas. */
+export interface ModeloDeMensagem {
+  nome: string;
+  /** `pt_BR` quando nao vem. */
+  idioma?: string;
+  /** Os `{{1}}`, `{{2}}`... do corpo, em ordem. */
+  parametros?: string[];
+}
+
 /**
- * Mensagens: SMS hoje, WhatsApp, Instagram e Messenger no mesmo metodo depois, mudando so
+ * Mensagens: SMS e WhatsApp, e Instagram e Messenger no mesmo metodo depois, mudando so
  * o `canal`. Escopo `mensagens`, que NAO vem ligado por padrao no token. GASTA SALDO por
  * mensagem aceita; o que falha volta para o saldo.
  *
@@ -37,15 +46,36 @@ export class Mensagens {
    */
   async enviar(
     para: string,
-    texto: string,
-    opcoes: { canal?: "sms"; chave?: string } = {},
+    texto: string | null,
+    opcoes: {
+      canal?: "sms" | "whatsapp";
+      chave?: string;
+      /** WhatsApp: o `id` do numero conectado por onde sai. Sem ele, sai pelo principal. */
+      de?: string;
+      /** WhatsApp: modelo aprovado, no lugar do texto. E o que e cobrado. */
+      modelo?: ModeloDeMensagem;
+    } = {},
   ): Promise<EnvioDeMensagem> {
+    const corpo: Record<string, unknown> = { canal: opcoes.canal ?? "sms", para };
+    if (opcoes.modelo) corpo.modelo = { idioma: "pt_BR", parametros: [], ...opcoes.modelo };
+    else corpo.texto = texto ?? "";
+    if (opcoes.de) corpo.de = opcoes.de;
+
     const r = await this.t.pedir<{ data: Record<string, unknown>; meta: EnvioDeMensagem["meta"] }>("POST", "mensagens", {
-      corpo: { canal: opcoes.canal ?? "sms", para, texto },
+      corpo,
       chaveIdempotencia: opcoes.chave || chaveIdempotencia(),
       envelope: true,
     });
     return { mensagem: r.data, meta: r.meta ?? {} };
+  }
+
+  /**
+   * Os modelos de WhatsApp de um numero conectado (o principal, sem `de`): `nome`, `idioma`,
+   * `status` (`approved`, `pending`, `rejected`), `categoria`, `texto` e quantos `parametros`.
+   * Os modelos se criam e se aprovam na Meta.
+   */
+  async modelos(de?: string): Promise<Record<string, unknown>[]> {
+    return this.t.pedir<Record<string, unknown>[]>("GET", "mensagens/modelos", { query: { de } });
   }
 
   /** As mensagens da conta, da mais nova para a mais antiga, sem o texto. */
