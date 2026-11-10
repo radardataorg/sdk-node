@@ -1,6 +1,6 @@
 {
   "name": "@radardata/sdk",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "SDK oficial do RadarData para Node e TypeScript: consultas, Verify, Motor de Analises e webhooks.",
   "license": "MIT",
   "homepage": "https://radardata.com.br",

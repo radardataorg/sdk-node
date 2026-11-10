@@ -8,7 +8,8 @@ import { EntradaInvalida, NaoEncontrado, RadarData } from "../src/index.js";
  *
  *   RADARDATA_CONTRATO_BASE=http://127.0.0.1:8765/api/v2 RADARDATA_CONTRATO_TOKEN=... npm run contrato
  *
- * O token precisa dos escopos leitura, mensagens, consultas, analises e fluxos. A base tem de ser local. Nada aqui gasta saldo
+ * O token precisa dos escopos leitura, mensagens, consultas, analises e fluxos, e a empresa dele
+ * precisa do WhatsApp e do Messenger liberados no catalogo. A base tem de ser local. Nada aqui gasta saldo
  * nem manda mensagem: em sandbox o envio e simulado.
  */
 const base = process.env.RADARDATA_CONTRATO_BASE;
@@ -51,6 +52,14 @@ describe.skipIf(!base || !token)("contrato com a api", () => {
     const r = await radar.mensagens.enviar("+5511900000000", null, { canal: "whatsapp", modelo: { nome: "contrato_teste", parametros: ["a"] } });
     expect(r.meta.sandbox).toBe(true);
     expect(r.mensagem.canal).toBe("whatsapp");
+  });
+
+  it("messenger: texto com etiqueta em sandbox e aceito sem pagina conectada, e de graca", async () => {
+    const r = await radar.mensagens.enviar("24718302957461803", "Contrato do SDK", { canal: "messenger", etiqueta: "atendimento_humano" });
+    expect(r.meta.sandbox).toBe(true);
+    expect(r.meta.preco).toBe(0);
+    expect(r.mensagem.canal).toBe("messenger");
+    expect(r.mensagem).toHaveProperty("conexao");
   });
 
   it("mensagens: emoji volta EntradaInvalida com texto_invalido", async () => {
